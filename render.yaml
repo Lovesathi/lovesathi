@@ -1,0 +1,40 @@
+services:
+  - type: web
+    name: lovesathi-web
+    runtime: node
+    rootDir: .
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    healthCheckPath: /
+    envVars:
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: NEXT_PUBLIC_SITE_URL
+        value: https://lovesathi.com
+      - key: NEXT_PUBLIC_SOCKET_URL
+        value: https://socket.lovesathi.com
+      - key: MSG91_API_KEY
+        sync: false
+      - key: MSG91_EMAIL_TEMPLATE_ID
+        sync: false
+
+  - type: web
+    name: lovesathi-socket
+    runtime: node
+    rootDir: .
+    buildCommand: npm install
+    startCommand: npm run server
+    healthCheckPath: /health
+    envVars:
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: NEXT_PUBLIC_SITE_URL
+        value: https://lovesathi.com
+      - key: SOCKET_PORT
+        value: 10000

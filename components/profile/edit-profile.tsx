@@ -70,6 +70,16 @@ const intentions = [
   "New friends and connections",
 ]
 
+function resolveStoragePhotoUrl(url: string, bucket: 'profile-photos' | 'matrimony-photos') {
+  if (!url) return url
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('blob:') || url.startsWith('/')) {
+    return url
+  }
+
+  const normalizedPath = url.replace(/^\/+/, '').replace(/^storage\/v1\/object\/public\/[^/]+\//, '')
+  return supabase.storage.from(bucket).getPublicUrl(normalizedPath).data.publicUrl
+}
+
 export function EditProfile({ onBack, onSave, mode }: EditProfileProps) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -121,14 +131,37 @@ export function EditProfile({ onBack, onSave, mode }: EditProfileProps) {
       setUserPath(currentMode)
 
       if (currentMode === 'dating') {
+        const { data: photoSeed, error: photoSeedError } = await supabase
+          .from('dating_profile_full')
+          .select('name, photos, photo_prompts')
+          .eq('user_id', user.id)
+          .maybeSingle()
+
+        if (photoSeedError) {
+          console.error('Error seeding dating edit photos:', photoSeedError)
+        }
+
+        if (photoSeed) {
+          const seedPhotoUrls = (photoSeed.photos as string[] || [])
+          const seedPrompts = (photoSeed.photo_prompts as string[] || [])
+          setDatingPhotos(seedPhotoUrls.map((url, index) => ({
+            url,
+            caption: seedPrompts[index] || ""
+          })))
+        }
+
         // ALWAYS fetch from dating_profile_full when in dating mode
         const { data, error } = await supabase
           .from('dating_profile_full')
-          .select('*')
+          .select('user_id, name, photos, photo_prompts, bio, prompts, interests, this_or_that_choices, relationship_goals, preferences, video_url, video_file_name, dob, gender, setup_completed, preferences_completed, questionnaire_completed')
           .eq('user_id', user.id)
-          .single()
+          .maybeSingle()
 
-        if (!error && data) {
+        if (error) {
+          console.error('Error fetching dating edit profile:', error)
+        }
+
+        if (data) {
           setDatingProfile(data as DatingProfileFull)
           // Initialize state from profile
           const photoUrls = (data.photos as string[] || [])
@@ -161,11 +194,15 @@ export function EditProfile({ onBack, onSave, mode }: EditProfileProps) {
         // ALWAYS fetch from matrimony_profile_full when in matrimony mode
         const { data, error } = await supabase
           .from('matrimony_profile_full')
-          .select('*')
+          .select('user_id, name, age, gender, created_by, photos, bio, personal, career, family, cultural, partner_preferences, step1_completed, step2_completed, step3_completed, step4_completed, step5_completed, step6_completed, step7_completed, profile_completed')
           .eq('user_id', user.id)
-          .single()
+          .maybeSingle()
 
-        if (!error && data) {
+        if (error) {
+          console.error('Error fetching matrimony edit profile:', error)
+        }
+
+        if (data) {
           setMatrimonyProfile(data as MatrimonyProfileFull)
           // Initialize state from profile
           const photos = (data.photos as string[] || []).map(url => ({ url }))
@@ -564,51 +601,40 @@ export function EditProfile({ onBack, onSave, mode }: EditProfileProps) {
               
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {currentPhotos.map((photo, index) => (
-                  <div key={index} className="relative group">
+                  <div key={index} className="space-y-2">
                     <div className={cn(
-                      "relative aspect-square rounded-xl overflow-hidden border-2",
-                      isMatrimony 
-                        ? "border-[#E5E5E5] bg-white" 
+                      "aspect-square overflow-hidden rounded-xl border-2",
+                      isMatrimony
+                        ? "border-[#E5E5E5] bg-white"
                         : "border-white/20 bg-[#14161B]"
                     )}>
                       <img
-                        src={photo.url}
+                        src={photo.url || '/placeholder.svg'}
                         alt={`Photo ${index + 1}`}
-                        className="w-full h-full object-cover"
+                        className="block h-full w-full object-cover"
+                        onError={(event) => {
+                          event.currentTarget.onerror = null
+                          event.currentTarget.src = '/placeholder-user.jpg'
+                        }}
                       />
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
                       <div className={cn(
-                        "absolute inset-0 transition-colors",
-                        isMatrimony ? "bg-black/0 group-hover:bg-black/10" : "bg-black/0 group-hover:bg-black/20"
-                      )} />
-                      <Button
-                        size="sm"
-                        className="absolute top-1.5 right-1.5 w-7 h-7 rounded-full p-0 opacity-0 group-hover:opacity-100 transition-opacity shadow-lg bg-[#97011A] hover:bg-[#7A0115]"
-                        onClick={() => removePhoto(index)}
-                      >
-                        <X className="w-4 h-4" style={{ color: '#FFFFFF' }} />
-                      </Button>
-                      <div className={cn(
-                        "absolute bottom-1.5 left-1.5 text-xs px-2 py-0.5 rounded-full",
+                        "text-xs px-2 py-1 rounded-full",
                         isMatrimony ? "bg-black/60 text-white" : "bg-black/60 text-white"
                       )}>
                         {index + 1}
                       </div>
+                      <Button
+                        size="sm"
+                        className="h-8 rounded-full px-3 shadow-lg bg-[#97011A] hover:bg-[#7A0115]"
+                        onClick={() => removePhoto(index)}
+                      >
+                        <X className="w-4 h-4" style={{ color: '#FFFFFF' }} />
+                      </Button>
                     </div>
-                    {userPath === 'dating' && (
-                      <Input
-                        placeholder={photoPrompts[index] || "Caption (optional)"}
-                        value={photo.caption || ""}
-                        onChange={(e) => updatePhotoCaption(index, e.target.value)}
-                        className={cn(
-                          "text-xs mt-2",
-                          isMatrimony ? "" : "bg-[#14161B] border-white/20 placeholder:text-[#A1A1AA]"
-                        )}
-                        style={!isMatrimony ? { color: '#FFFFFF' } : undefined}
-                      />
-                    )}
                   </div>
                 ))}
-                
                 {currentPhotos.length < 6 && (
                   <button
                     onClick={() => fileInputRef.current?.click()}

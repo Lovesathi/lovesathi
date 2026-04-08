@@ -235,6 +235,15 @@ export function ProfileView({ isOwnProfile = false, onEdit, onBack, userId, mode
     age = matrimonyProfile.age
   }
 
+  useEffect(() => {
+    if (photos.length === 0) {
+      setCurrentPhotoIndex(0)
+      return
+    }
+
+    setCurrentPhotoIndex((prev) => (prev >= photos.length ? 0 : prev))
+  }, [photos.length, userId, userPath])
+
   const handleNextPhoto = () => {
     if (photos.length > 0) {
       setCurrentPhotoIndex((prev) => (prev + 1) % photos.length)

@@ -1,3 +1,4 @@
+require('dotenv').config({ path: '.env.local' });
 const express = require('express');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
@@ -200,7 +201,7 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-const PORT = process.env.SOCKET_PORT || 3001;
+const PORT = process.env.PORT || process.env.SOCKET_PORT || 3001;
 
 httpServer.listen(PORT, () => {
   console.log(`Socket.io server running on port ${PORT}`);

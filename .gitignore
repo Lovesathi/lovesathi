@@ -26,3 +26,13 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .env*.local
+
+# local logs
+*.log
+*.err.log
+
+# os files
+.DS_Store
+
+# supabase local temp
+supabase/.temp/

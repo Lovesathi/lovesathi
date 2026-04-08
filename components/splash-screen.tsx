@@ -108,7 +108,7 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
         style={{
           width: '100%',
           height: '100vh',
-          backgroundImage: 'url(/assets/image52.png)',
+          background: 'linear-gradient(135deg, rgba(255, 111, 145, 0.92), rgba(255, 150, 113, 0.88), rgba(255, 214, 102, 0.82))',
           backgroundSize: 'cover',
           backgroundPosition: 'center',
           backgroundRepeat: 'no-repeat',
@@ -215,7 +215,7 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
       style={{
         width: '100%',
         height: '100vh',
-        backgroundImage: 'url(/assets/image52.png)',
+        background: 'linear-gradient(135deg, rgba(255, 111, 145, 0.92), rgba(255, 150, 113, 0.88), rgba(255, 214, 102, 0.82))',
         backgroundSize: 'cover',
         backgroundPosition: 'center',
         backgroundRepeat: 'no-repeat',

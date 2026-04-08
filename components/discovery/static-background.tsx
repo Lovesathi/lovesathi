@@ -6,10 +6,7 @@ export function StaticBackground() {
       <div
         className="absolute inset-0"
         style={{
-          backgroundImage: 'url("/image 52.png")',
-          backgroundRepeat: 'no-repeat',
-          backgroundPosition: 'center center',
-          backgroundSize: 'cover',
+          background: 'linear-gradient(180deg, #0B0C0F 0%, #14161B 45%, #0E0F12 100%)',
           backgroundAttachment: 'fixed',
         }}
       />
