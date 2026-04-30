@@ -37,19 +37,6 @@ export function useMessageNotifications(options: UseMessageNotificationsOptions 
     }
 
     try {
-      // Try dating profile first
-      let { data: datingProfile } = await supabase
-        .from('dating_profile_full')
-        .select('name')
-        .eq('user_id', senderId)
-        .single()
-
-      if (datingProfile?.name) {
-        senderNamesCache.current.set(senderId, datingProfile.name)
-        return datingProfile.name
-      }
-
-      // Try matrimony profile
       const { data: matrimonyProfile } = await supabase
         .from('matrimony_profile_full')
         .select('name')
@@ -108,4 +95,3 @@ export function useMessageNotifications(options: UseMessageNotificationsOptions 
     // Expose any utility functions if needed
   }
 }
-

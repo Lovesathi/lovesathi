@@ -8,10 +8,10 @@ import { RealtimeChannel } from '@supabase/supabase-js'
 export async function getMatchId(
   userId: string,
   otherUserId: string,
-  matchType: 'dating' | 'matrimony'
+  matchType: 'matrimony'
 ): Promise<string | null> {
   try {
-    const tableName = matchType === 'dating' ? 'dating_matches' : 'matrimony_matches'
+    const tableName = 'matrimony_matches'
     
     const { data, error } = await supabase
       .from(tableName)
@@ -58,20 +58,9 @@ export async function getMatchId(
 export async function getMatchIdAuto(
   userId: string,
   otherUserId: string
-): Promise<{ matchId: string; matchType: 'dating' | 'matrimony' } | null> {
-  // Try dating first
-  const datingMatchId = await getMatchId(userId, otherUserId, 'dating')
-  if (datingMatchId) {
-    return { matchId: datingMatchId, matchType: 'dating' }
-  }
-
-  // Try matrimony
+): Promise<{ matchId: string; matchType: 'matrimony' } | null> {
   const matrimonyMatchId = await getMatchId(userId, otherUserId, 'matrimony')
-  if (matrimonyMatchId) {
-    return { matchId: matrimonyMatchId, matchType: 'matrimony' }
-  }
-
-  return null
+  return matrimonyMatchId ? { matchId: matrimonyMatchId, matchType: 'matrimony' } : null
 }
 
 /**
@@ -484,4 +473,3 @@ export async function deleteAllMessagesForUser(
     return false
   }
 }
-

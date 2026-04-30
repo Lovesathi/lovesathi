@@ -1,875 +1,323 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useEffect, useState } from "react"
+import { ArrowLeft, Briefcase, CheckCircle2, Edit, Heart, Home, MapPin, Share, Sparkles, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Card, CardContent } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import { MapPin, Briefcase, GraduationCap, Users, Edit, Share, MoreVertical, Heart, Video, Home, Building2, ChevronLeft, ChevronRight, Sparkles, CheckCircle2, ArrowLeft } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { StaticBackground } from "@/components/discovery/static-background"
 import { supabase } from "@/lib/supabaseClient"
-import type { DatingProfileFull } from "@/lib/datingProfileService"
-import type { MatrimonyProfileFull } from "@/lib/matrimonyService"
+import { recordMatrimonyLike } from "@/lib/matchmakingService"
 import { EditProfile } from "./edit-profile"
-import { recordDatingLike, recordMatrimonyLike } from "@/lib/matchmakingService"
+import type { MatrimonyProfileFull } from "@/lib/matrimonyService"
 
 interface ProfileViewProps {
   isOwnProfile?: boolean
   onEdit?: () => void
   onBack?: () => void
-  userId?: string // Optional: if viewing another user's profile
-  mode?: 'dating' | 'matrimony' // Required: determines which profile table to use
+  userId?: string
+  mode?: "matrimony"
 }
 
-function calculateAge(dob: string | null | undefined): number | null {
-  if (!dob) return null
-  const birthDate = new Date(dob)
-  const today = new Date()
-  let age = today.getFullYear() - birthDate.getFullYear()
-  const monthDiff = today.getMonth() - birthDate.getMonth()
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-    age--
-  }
-  return age
-}
-
-export function ProfileView({ isOwnProfile = false, onEdit, onBack, userId, mode }: ProfileViewProps) {
-  const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0)
+export function ProfileView({ isOwnProfile = false, onBack, userId }: ProfileViewProps) {
   const [loading, setLoading] = useState(true)
-  const [userPath, setUserPath] = useState<'dating' | 'matrimony' | null>(null)
-  const [datingProfile, setDatingProfile] = useState<DatingProfileFull | null>(null)
-  const [matrimonyProfile, setMatrimonyProfile] = useState<MatrimonyProfileFull | null>(null)
+  const [editing, setEditing] = useState(false)
+  const [profile, setProfile] = useState<MatrimonyProfileFull | null>(null)
   const [verified, setVerified] = useState(false)
-  const [isEditing, setIsEditing] = useState(false)
-  const [touchStart, setTouchStart] = useState(0)
-  const [touchEnd, setTouchEnd] = useState(0)
-  const photoContainerRef = useRef<HTMLDivElement>(null)
+  const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0)
   const [isMatched, setIsMatched] = useState(false)
   const [canLikeBack, setCanLikeBack] = useState(false)
   const [isLiking, setIsLiking] = useState(false)
-  const isMatrimony = mode === 'matrimony'
 
   useEffect(() => {
-    fetchProfile()
-  }, [userId, isOwnProfile, mode])
+    void fetchProfile()
+  }, [userId, isOwnProfile])
 
-  const handleEdit = () => {
-    setIsEditing(true)
-  }
+  useEffect(() => {
+    const count = (profile?.photos as string[] | undefined)?.length || 0
+    if (count === 0) {
+      setCurrentPhotoIndex(0)
+      return
+    }
+    setCurrentPhotoIndex((prev) => (prev >= count ? 0 : prev))
+  }, [profile?.photos])
 
-  const handleEditBack = () => {
-    setIsEditing(false)
-  }
-
-  const handleEditSave = () => {
-    fetchProfile() // Refresh profile data
-    setIsEditing(false)
-  }
-
-  const fetchProfile = async () => {
+  async function fetchProfile() {
     try {
       setLoading(true)
-      const { data: { user } } = await supabase.auth.getUser()
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
       if (!user) return
 
       const targetUserId = userId || user.id
 
-      // Use mode prop to determine which profile to load, NOT selected_path
-      // Mode is determined by the current context (which page/route we're on)
-      const currentMode = mode || 'dating' // Default to dating for backward compatibility
-      setUserPath(currentMode)
+      const { data, error } = await supabase
+        .from("matrimony_profile_full")
+        .select("*")
+        .eq("user_id", targetUserId)
+        .single()
 
-      // Check verification status
+      if (error) throw error
+      setProfile(data as MatrimonyProfileFull)
+
       const { data: verification } = await supabase
-        .from('id_verifications')
-        .select('status')
-        .eq('user_id', targetUserId)
-        .eq('status', 'approved')
+        .from("id_verifications")
+        .select("status")
+        .eq("user_id", targetUserId)
+        .eq("status", "approved")
         .maybeSingle()
 
       setVerified(!!verification)
 
-      // Check match and like status only if viewing another user's profile
       if (!isOwnProfile && userId) {
-        if (currentMode === 'dating') {
-          // Check if there's a match - matches are stored with user1_id < user2_id
-          const { data: allMatches } = await supabase
-            .from('dating_matches')
-            .select('id, user1_id, user2_id')
-            .eq('is_active', true)
+        const { data: matches } = await supabase
+          .from("matrimony_matches")
+          .select("id,user1_id,user2_id")
+          .eq("is_active", true)
 
-          const matchData = allMatches?.find(m => 
-            (m.user1_id === user.id && m.user2_id === targetUserId) ||
-            (m.user1_id === targetUserId && m.user2_id === user.id)
-          )
+        const matchData = matches?.find(
+          (match) =>
+            (match.user1_id === user.id && match.user2_id === targetUserId) ||
+            (match.user1_id === targetUserId && match.user2_id === user.id),
+        )
 
-          setIsMatched(!!matchData)
+        setIsMatched(!!matchData)
 
-          // Check if the viewed user has liked the current user (but current user hasn't liked back)
-          if (!matchData) {
-            const { data: likeFromThem } = await supabase
-              .from('dating_likes')
-              .select('id')
-              .eq('liker_id', targetUserId)
-              .eq('liked_id', user.id)
-              .in('action', ['like', 'super_like'])
-              .maybeSingle()
+        if (!matchData) {
+          const { data: likeFromThem } = await supabase
+            .from("matrimony_likes")
+            .select("id")
+            .eq("liker_id", targetUserId)
+            .eq("liked_id", user.id)
+            .in("action", ["like", "connect"])
+            .maybeSingle()
 
-            const { data: likeFromMe } = await supabase
-              .from('dating_likes')
-              .select('id')
-              .eq('liker_id', user.id)
-              .eq('liked_id', targetUserId)
-              .in('action', ['like', 'super_like'])
-              .maybeSingle()
+          const { data: likeFromMe } = await supabase
+            .from("matrimony_likes")
+            .select("id")
+            .eq("liker_id", user.id)
+            .eq("liked_id", targetUserId)
+            .in("action", ["like", "connect"])
+            .maybeSingle()
 
-            setCanLikeBack(!!likeFromThem && !likeFromMe)
-          } else {
-            setCanLikeBack(false)
-          }
-        } else if (currentMode === 'matrimony') {
-          // Check if there's a match - matches are stored with user1_id < user2_id
-          const { data: allMatches } = await supabase
-            .from('matrimony_matches')
-            .select('id, user1_id, user2_id')
-            .eq('is_active', true)
-
-          const matchData = allMatches?.find(m => 
-            (m.user1_id === user.id && m.user2_id === targetUserId) ||
-            (m.user1_id === targetUserId && m.user2_id === user.id)
-          )
-
-          setIsMatched(!!matchData)
-
-          // Check if the viewed user has liked the current user (but current user hasn't liked back)
-          if (!matchData) {
-            const { data: likeFromThem } = await supabase
-              .from('matrimony_likes')
-              .select('id')
-              .eq('liker_id', targetUserId)
-              .eq('liked_id', user.id)
-              .in('action', ['like', 'connect'])
-              .maybeSingle()
-
-            const { data: likeFromMe } = await supabase
-              .from('matrimony_likes')
-              .select('id')
-              .eq('liker_id', user.id)
-              .eq('liked_id', targetUserId)
-              .in('action', ['like', 'connect'])
-              .maybeSingle()
-
-            setCanLikeBack(!!likeFromThem && !likeFromMe)
-          } else {
-            setCanLikeBack(false)
-          }
+          setCanLikeBack(!!likeFromThem && !likeFromMe)
+        } else {
+          setCanLikeBack(false)
         }
       } else {
         setIsMatched(false)
         setCanLikeBack(false)
       }
-
-      if (currentMode === 'dating') {
-        // ALWAYS fetch from dating_profile_full when in dating mode
-        const { data, error } = await supabase
-          .from('dating_profile_full')
-          .select('*')
-          .eq('user_id', targetUserId)
-          .single()
-
-        if (!error && data) {
-          setDatingProfile(data as DatingProfileFull)
-        }
-      } else if (currentMode === 'matrimony') {
-        // ALWAYS fetch from matrimony_profile_full when in matrimony mode
-        const { data, error } = await supabase
-          .from('matrimony_profile_full')
-          .select('*')
-          .eq('user_id', targetUserId)
-          .single()
-
-        if (!error && data) {
-          setMatrimonyProfile(data as MatrimonyProfileFull)
-        }
-      }
     } catch (error) {
-      console.error("Error fetching profile:", error)
+      console.error("Error fetching matrimony profile:", error)
     } finally {
       setLoading(false)
     }
   }
 
-  if (isEditing && isOwnProfile) {
-    return <EditProfile mode={mode} onBack={handleEditBack} onSave={handleEditSave} />
-  }
-
-  if (loading) {
-    return (
-      <div className={cn("min-h-screen relative", isMatrimony ? "bg-white" : "bg-[#0E0F12]")}>
-        {!isMatrimony && <StaticBackground />}
-        <div className="flex items-center justify-center h-screen">
-          <p className={isMatrimony ? "text-black" : "text-white"}>Loading profile...</p>
-        </div>
-      </div>
-    )
-  }
-
-  const profile = userPath === 'dating' ? datingProfile : matrimonyProfile
-  const name = profile?.name || "User"
-  const photos = (userPath === 'dating' 
-    ? (datingProfile?.photos as string[] || [])
-    : (matrimonyProfile?.photos as string[] || [])) || []
-  const photoPrompts = (userPath === 'dating' 
-    ? (datingProfile?.photo_prompts as string[] || [])
-    : []) || []
-  const bio = userPath === 'dating' 
-    ? datingProfile?.bio 
-    : matrimonyProfile?.bio
-
-  // Calculate age
-  let age: number | null = null
-  if (userPath === 'dating' && datingProfile?.dob) {
-    age = calculateAge(datingProfile.dob)
-  } else if (userPath === 'matrimony' && matrimonyProfile?.age) {
-    age = matrimonyProfile.age
-  }
-
-  useEffect(() => {
-    if (photos.length === 0) {
-      setCurrentPhotoIndex(0)
-      return
-    }
-
-    setCurrentPhotoIndex((prev) => (prev >= photos.length ? 0 : prev))
-  }, [photos.length, userId, userPath])
-
-  const handleNextPhoto = () => {
-    if (photos.length > 0) {
-      setCurrentPhotoIndex((prev) => (prev + 1) % photos.length)
-    }
-  }
-
-  const handlePrevPhoto = () => {
-    if (photos.length > 0) {
-      setCurrentPhotoIndex((prev) => (prev - 1 + photos.length) % photos.length)
-    }
-  }
-
-  const handleTouchStart = (e: React.TouchEvent) => {
-    setTouchStart(e.targetTouches[0].clientX)
-  }
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    setTouchEnd(e.targetTouches[0].clientX)
-  }
-
-  const handleTouchEnd = () => {
-    if (!touchStart || !touchEnd) return
-    const distance = touchStart - touchEnd
-    const isLeftSwipe = distance > 50
-    const isRightSwipe = distance < -50
-
-    if (isLeftSwipe && photos.length > 0) {
-      handleNextPhoto()
-    }
-    if (isRightSwipe && photos.length > 0) {
-      handlePrevPhoto()
-    }
-  }
-
-  const handleLike = async () => {
+  async function handleLike() {
     if (!userId || isOwnProfile || isLiking) return
 
     try {
       setIsLiking(true)
-      const { data: { user } } = await supabase.auth.getUser()
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
       if (!user) return
 
-      const currentMode = mode || 'dating'
-      const result = currentMode === 'dating'
-        ? await recordDatingLike(user.id, userId, 'like')
-        : await recordMatrimonyLike(user.id, userId, 'like')
-
+      const result = await recordMatrimonyLike(user.id, userId, "like")
       if (result.success) {
-        // Refresh the profile to update match/like status
         await fetchProfile()
       }
     } catch (error) {
-      console.error("Error liking profile:", error)
+      console.error("Error liking matrimony profile:", error)
     } finally {
       setIsLiking(false)
     }
   }
 
+  if (editing && isOwnProfile) {
+    return <EditProfile mode="matrimony" onBack={() => setEditing(false)} onSave={() => void fetchProfile()} />
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <p className="text-black">Loading profile...</p>
+      </div>
+    )
+  }
+
+  const photos = (profile?.photos as string[] | undefined) || []
+  const personal = profile?.personal || {}
+  const career = profile?.career || {}
+  const family = profile?.family || {}
+  const cultural = profile?.cultural || {}
+  const preferences = profile?.partner_preferences || {}
+  const locationParts = [career.work_location?.city, career.work_location?.state, career.work_location?.country].filter(Boolean)
+
   return (
-    <div className={cn("min-h-screen relative", isMatrimony ? "bg-white" : "bg-[#0E0F12]")}>
-      {!isMatrimony && <StaticBackground />}
-      {/* Header */}
-      <div className={cn(
-        "sticky top-0 z-50 backdrop-blur-xl border-b",
-        isMatrimony 
-          ? "bg-white border-[#E5E5E5]"
-          : "bg-gradient-to-b from-[#14161B]/80 via-[#14161B]/60 to-transparent border-white/10"
-      )}>
+    <div className="min-h-screen bg-white">
+      <div className="sticky top-0 z-20 bg-white border-b border-[#E5E5E5]">
         <div className="flex items-center justify-between p-4">
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center gap-4">
             {!isOwnProfile && onBack && (
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className={cn(
-                  "p-2 rounded-full backdrop-blur-xl border",
-                  isMatrimony 
-                    ? "hover:bg-gray-50 bg-white border-[#E5E5E5]"
-                    : "hover:bg-white/20 bg-white/10 border-white/20"
-                )}
-                onClick={onBack}
-              >
-                <ArrowLeft className={cn("w-5 h-5", isMatrimony ? "text-black" : "text-white")} />
+              <Button variant="ghost" size="sm" className="p-2" onClick={onBack}>
+                <ArrowLeft className="w-5 h-5 text-black" />
               </Button>
             )}
-            <h1 className={cn("text-xl font-bold", isMatrimony ? "text-black" : "text-white")}>
-              {isOwnProfile ? "My Profile" : name}
-            </h1>
+            <h1 className="text-xl font-bold text-black">{isOwnProfile ? "My Profile" : profile?.name || "Profile"}</h1>
           </div>
-          <div className="flex items-center space-x-2">
-            {isOwnProfile && (
-              <>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={handleEdit} 
-                  className={cn(
-                    isMatrimony 
-                      ? "bg-white border-[#E5E5E5] text-black hover:bg-gray-50"
-                      : "bg-white/10 border-white/20 text-white hover:bg-white/20"
-                  )}
-                >
-                  <Edit className="w-4 h-4 mr-2" />
-                  Edit
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className={cn(
-                    isMatrimony 
-                      ? "bg-white border-[#E5E5E5] text-black hover:bg-gray-50"
-                      : "bg-white/10 border-white/20 text-white hover:bg-white/20"
-                  )}
-                >
-                  <Share className="w-4 h-4" />
-                </Button>
-              </>
-            )}
-          </div>
+          {isOwnProfile ? (
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => setEditing(true)} className="border-[#E5E5E5]">
+                <Edit className="w-4 h-4 mr-2" />
+                Edit
+              </Button>
+              <Button variant="outline" size="sm" className="border-[#E5E5E5]">
+                <Share className="w-4 h-4" />
+              </Button>
+            </div>
+          ) : isMatched ? (
+            <Badge className="bg-[#97011A] text-white">
+              <CheckCircle2 className="w-4 h-4 mr-1" />
+              Matched
+            </Badge>
+          ) : (
+            <Button className="bg-[#97011A] hover:bg-[#7A0115]" onClick={handleLike} disabled={isLiking}>
+              <Heart className="w-4 h-4 mr-2" />
+              {isLiking ? "Liking..." : canLikeBack ? "Like Back" : "Like"}
+            </Button>
+          )}
         </div>
       </div>
 
       <div className="p-4 pb-24 space-y-4">
-        {/* Photo Section */}
         {photos.length > 0 && (
-          <div className="relative rounded-2xl overflow-hidden shadow-lg group">
-            <div 
-              ref={photoContainerRef}
-              className="relative h-80 bg-gradient-to-br from-gray-900/50 to-gray-800/50"
-              onTouchStart={handleTouchStart}
-              onTouchMove={handleTouchMove}
-              onTouchEnd={handleTouchEnd}
-            >
-              <img
-                src={photos[currentPhotoIndex] || "/placeholder.svg"}
-                alt={`${name} photo ${currentPhotoIndex + 1}`}
-                className="w-full h-full object-cover"
-              />
-
-              {/* Subtle gradient overlay */}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
-
-              {/* Photo navigation arrows - minimal */}
+          <div className="rounded-2xl overflow-hidden border border-[#E5E5E5] shadow-sm">
+            <div className="relative h-80 bg-[#FAFAFA]">
+              <img src={photos[currentPhotoIndex] || "/placeholder.svg"} alt={profile?.name || "Profile photo"} className="h-full w-full object-cover" />
               {photos.length > 1 && (
-                <>
-                  <button
-                    onClick={handlePrevPhoto}
-                    className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/30 backdrop-blur-md border border-white/10 flex items-center justify-center text-white hover:bg-black/50 transition-all z-10 opacity-0 group-hover:opacity-100"
-                    aria-label="Previous photo"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={handleNextPhoto}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/30 backdrop-blur-md border border-white/10 flex items-center justify-center text-white hover:bg-black/50 transition-all z-10 opacity-0 group-hover:opacity-100"
-                    aria-label="Next photo"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                </>
-              )}
-
-              {/* Minimal photo navigation dots */}
-              {photos.length > 1 && (
-                <div className="absolute bottom-3 left-1/2 transform -translate-x-1/2 flex space-x-1.5 z-10">
+                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
                   {photos.map((_, index) => (
                     <button
                       key={index}
                       onClick={() => setCurrentPhotoIndex(index)}
-                      className={cn(
-                        "transition-all duration-200 rounded-full",
-                        index === currentPhotoIndex 
-                          ? "w-6 h-1.5 bg-white/90" 
-                          : "w-1.5 h-1.5 bg-white/40 hover:bg-white/60",
-                      )}
-                      aria-label={`Go to photo ${index + 1}`}
+                      className={cn("rounded-full transition-all", index === currentPhotoIndex ? "w-6 h-1.5 bg-white" : "w-1.5 h-1.5 bg-white/60")}
                     />
                   ))}
                 </div>
               )}
-
-              {/* Verified Badge - minimal */}
               {verified && (
-                <div className="absolute top-3 right-3 z-10">
-                  <Badge className="bg-white/20 backdrop-blur-md text-white border-white/20 flex items-center gap-1 px-2 py-0.5 text-xs">
-                    <CheckCircle2 className="w-3 h-3" />
+                <div className="absolute top-3 right-3">
+                  <Badge className="bg-white text-black border border-[#E5E5E5]">
+                    <CheckCircle2 className="w-3 h-3 mr-1 text-[#97011A]" />
                     Verified
                   </Badge>
                 </div>
               )}
-
-              {/* Photo counter - minimal */}
-              {photos.length > 1 && (
-                <div className="absolute top-3 left-3 z-10">
-                  <Badge className="bg-black/30 backdrop-blur-md text-white/90 border-white/10 px-2 py-0.5 text-xs">
-                    {currentPhotoIndex + 1}/{photos.length}
-                  </Badge>
-                </div>
-              )}
             </div>
-            
-            {/* Photo Prompt - minimal */}
-            {userPath === 'dating' && photoPrompts[currentPhotoIndex] && photoPrompts[currentPhotoIndex].trim() && (
-              <div className="bg-white/5 backdrop-blur-sm border-t border-white/10 p-3">
-                <p className="text-xs text-center" style={{ color: '#FFFFFF' }}>
-                  {photoPrompts[currentPhotoIndex]}
-                </p>
-              </div>
-            )}
           </div>
         )}
 
-        {/* Basic Info */}
-        <Card className={cn(
-          "backdrop-blur-xl shadow-xl",
-          isMatrimony 
-            ? "bg-white border-[#E5E5E5] text-black"
-            : "bg-[#14161B] border-white/20 text-white"
-        )}>
+        <Card className="border-[#E5E5E5]">
           <CardContent className="p-6 space-y-5">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-2">
-                  <h2 className={cn("text-3xl font-bold", isMatrimony ? "text-black" : "text-white")}>
-                    {name}{age ? `, ${age}` : ''}
-                  </h2>
-                  {verified && (
-                    <CheckCircle2 className="w-5 h-5" style={{ color: '#3B82F6' }} />
-                  )}
-                </div>
-                
-                {/* Quick Info Pills */}
-                <div className="flex flex-wrap gap-2 mt-3">
-                  {userPath === 'dating' && datingProfile?.gender && (
-                    <Badge variant="secondary" className={cn(
-                      isMatrimony 
-                        ? "bg-gray-100 text-black border-[#E5E5E5]"
-                        : "bg-[#14161B] text-white border-white/20"
-                    )}>
-                      {datingProfile.gender}
-                    </Badge>
-                  )}
-                  {userPath === 'dating' && datingProfile?.relationship_goals && (
-                    <Badge variant="secondary" className={cn(
-                      isMatrimony 
-                        ? "bg-gray-100 text-black border-[#E5E5E5]"
-                        : "bg-[#14161B] text-white border-white/20"
-                    )}>
-                      {datingProfile.relationship_goals}
-                    </Badge>
-                  )}
-                  {userPath === 'matrimony' && matrimonyProfile?.gender && (
-                    <Badge variant="secondary" className={cn(
-                      isMatrimony 
-                        ? "bg-gray-100 text-black border-[#E5E5E5]"
-                        : "bg-[#14161B] text-white border-white/20"
-                    )}>
-                      {matrimonyProfile.gender}
-                    </Badge>
-                  )}
-                  {userPath === 'matrimony' && matrimonyProfile?.personal?.height_cm && (
-                    <Badge variant="secondary" className={cn(
-                      isMatrimony 
-                        ? "bg-gray-100 text-black border-[#E5E5E5]"
-                        : "bg-[#14161B] text-white border-white/20"
-                    )}>
-                      {matrimonyProfile.personal.height_cm} cm
-                    </Badge>
-                  )}
-                </div>
-              </div>
-              
-              {!isOwnProfile && (
-                <>
-                  {isMatched ? (
-                    <Badge className="bg-gradient-to-r from-[#97011A] to-[#7A0115] text-white border-0 shadow-lg flex items-center gap-1.5 px-4 py-2 text-sm font-semibold">
-                      <CheckCircle2 className="w-4 h-4" />
-                      Matched
-                    </Badge>
-                  ) : canLikeBack ? (
-                    <Button 
-                      size="lg"
-                      onClick={handleLike}
-                      disabled={isLiking}
-                      className="rounded-full bg-gradient-to-r from-[#97011A] to-[#7A0115] hover:from-[#7A0115] hover:to-[#97011A] text-white shadow-lg border-0 px-6 h-12"
-                    >
-                      <Heart className="w-5 h-5 mr-2 fill-white" />
-                      {isLiking ? "Liking..." : "Like Back"}
-                    </Button>
-                  ) : (
-                    <Button 
-                      size="lg"
-                      onClick={handleLike}
-                      disabled={isLiking}
-                      className="rounded-full bg-gradient-to-r from-[#97011A] to-[#7A0115] hover:from-[#7A0115] hover:to-[#97011A] text-white shadow-lg border-0 px-6 h-12"
-                    >
-                      <Heart className="w-5 h-5 mr-2 fill-white" />
-                      {isLiking ? "Liking..." : "Like"}
-                    </Button>
-                  )}
-                </>
-              )}
+            <div className="flex items-center gap-2">
+              <h2 className="text-3xl font-bold text-black">
+                {profile?.name}
+                {profile?.age ? `, ${profile.age}` : ""}
+              </h2>
+              {verified && <CheckCircle2 className="w-5 h-5 text-[#97011A]" />}
             </div>
 
-            {bio && (
+            <div className="flex flex-wrap gap-2">
+              {profile?.gender && <Badge variant="secondary">{profile.gender}</Badge>}
+              {personal.height_cm && <Badge variant="secondary">{personal.height_cm} cm</Badge>}
+              {personal.marital_status && <Badge variant="secondary">{personal.marital_status}</Badge>}
+            </div>
+
+            {profile?.bio && (
               <>
-                <Separator className={cn(isMatrimony ? "bg-[#E5E5E5]" : "bg-white/10")} />
+                <Separator />
                 <div className="space-y-2">
-                  <h3 className={cn("font-semibold flex items-center gap-2", isMatrimony ? "text-black" : "text-white")}>
-                    <Sparkles className="w-4 h-4" style={{ color: '#97011A' }} />
+                  <h3 className="font-semibold flex items-center gap-2 text-black">
+                    <Sparkles className="w-4 h-4 text-[#97011A]" />
                     About Me
                   </h3>
-                  <p className={cn("text-sm leading-relaxed", isMatrimony ? "text-[#666666]" : "text-white")}>{bio}</p>
+                  <p className="text-sm leading-relaxed text-[#666666]">{profile.bio}</p>
                 </div>
               </>
             )}
           </CardContent>
         </Card>
 
-        {/* Dating Profile Sections */}
-        {userPath === 'dating' && datingProfile && (
-          <>
-            {/* Interests */}
-            {datingProfile.interests && (datingProfile.interests as string[]).length > 0 && (
-              <Card className="bg-[#14161B] backdrop-blur-xl border-white/20 shadow-xl !text-white">
-                <CardContent className="p-6 space-y-4">
-                  <h3 className="font-semibold text-lg mb-3" style={{ color: '#FFFFFF' }}>Interests</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {(datingProfile.interests as string[]).map((interest) => (
-                      <Badge
-                        key={interest}
-                        className="bg-[#97011A]/10 text-[#97011A] border-[#97011A]/20 hover:bg-[#97011A]/20 transition-all px-3 py-1.5"
-                      >
-                        {interest}
-                      </Badge>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+        <Card className="border-[#E5E5E5]">
+          <CardContent className="p-6 space-y-4">
+            <h3 className="font-semibold text-lg flex items-center gap-2 text-black">
+              <Briefcase className="w-5 h-5 text-[#97011A]" />
+              Career & Education
+            </h3>
+            <div className="grid sm:grid-cols-2 gap-4 text-sm text-[#666666]">
+              {career.highest_education && <div><span className="font-medium text-black">Education:</span> {career.highest_education}</div>}
+              {career.job_title && <div><span className="font-medium text-black">Profession:</span> {career.job_title}</div>}
+              {career.company && <div><span className="font-medium text-black">Company:</span> {career.company}</div>}
+              {career.annual_income && <div><span className="font-medium text-black">Income:</span> {career.annual_income}</div>}
+              {locationParts.length > 0 && (
+                <div className="sm:col-span-2 flex items-center gap-2">
+                  <MapPin className="w-4 h-4 text-[#97011A]" />
+                  <span>{locationParts.join(", ")}</span>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
 
-            {/* Prompts */}
-            {datingProfile.prompts && (datingProfile.prompts as Array<{ prompt: string; answer: string }>).length > 0 && (
-              <Card className="bg-[#14161B] backdrop-blur-xl border-white/20 shadow-xl !text-white">
-                <CardContent className="p-6 space-y-5">
-                  <h3 className="font-semibold text-lg mb-4" style={{ color: '#FFFFFF' }}>Prompts</h3>
-                  <div className="space-y-5">
-                    {(datingProfile.prompts as Array<{ prompt: string; answer: string }>).map((prompt, index) => (
-                      <div key={index} className="space-y-2 pb-4 border-b border-white/10 last:border-0 last:pb-0">
-                        <p className="text-sm font-semibold" style={{ color: '#FFFFFF' }}>{prompt.prompt}</p>
-                        <p className="text-sm leading-relaxed" style={{ color: '#FFFFFF' }}>{prompt.answer}</p>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+        <Card className="border-[#E5E5E5]">
+          <CardContent className="p-6 space-y-4">
+            <h3 className="font-semibold text-lg flex items-center gap-2 text-black">
+              <Users className="w-5 h-5 text-[#97011A]" />
+              Family & Cultural Details
+            </h3>
+            <div className="grid sm:grid-cols-2 gap-4 text-sm text-[#666666]">
+              {family.family_type && <div><span className="font-medium text-black">Family Type:</span> {family.family_type}</div>}
+              {family.family_values && <div><span className="font-medium text-black">Values:</span> {family.family_values}</div>}
+              {cultural.religion && <div><span className="font-medium text-black">Religion:</span> {cultural.religion}</div>}
+              {cultural.mother_tongue && <div><span className="font-medium text-black">Mother Tongue:</span> {cultural.mother_tongue}</div>}
+              {cultural.community && <div><span className="font-medium text-black">Community:</span> {cultural.community}</div>}
+              {cultural.place_of_birth && (
+                <div className="flex items-center gap-2">
+                  <Home className="w-4 h-4 text-[#97011A]" />
+                  <span>{cultural.place_of_birth}</span>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
 
-            {/* This or That */}
-            {datingProfile.this_or_that_choices && (datingProfile.this_or_that_choices as Array<{ option_a: string; option_b: string; selected: 0 | 1 }>).length > 0 && (
-              <Card className="bg-[#14161B] backdrop-blur-xl border-white/20 shadow-xl !text-white">
-                <CardContent className="p-6 space-y-4">
-                  <h3 className="font-semibold text-lg mb-4" style={{ color: '#FFFFFF' }}>This or That</h3>
-                  <div className="space-y-3">
-                    {(datingProfile.this_or_that_choices as Array<{ option_a: string; option_b: string; selected: 0 | 1 }>).map((choice, index) => (
-                      <div key={index} className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-                        <div className="flex justify-end">
-                          <Badge 
-                            className={cn(
-                              "px-4 py-2 text-sm transition-all !text-white",
-                              choice.selected === 0
-                                ? "bg-[#97011A] border-[#97011A] hover:bg-[#7A0115] transition-all"
-                                : "bg-white/10 border-white/20"
-                            )}
-                            style={{ color: '#FFFFFF' }}
-                          >
-                            {choice.option_a}
-                          </Badge>
-                        </div>
-                        <span className="text-sm font-medium px-2 flex-shrink-0" style={{ color: '#FFFFFF' }}>or</span>
-                        <div className="flex justify-start">
-                          <Badge 
-                            className={cn(
-                              "px-4 py-2 text-sm transition-all !text-white",
-                              choice.selected === 1
-                                ? "bg-[#97011A] border-[#97011A] hover:bg-[#7A0115] transition-all"
-                                : "bg-white/10 border-white/20"
-                            )}
-                            style={{ color: '#FFFFFF' }}
-                          >
-                            {choice.option_b}
-                          </Badge>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Video */}
-            {datingProfile.video_url && (
-              <Card className="bg-[#14161B] backdrop-blur-xl border-white/20 shadow-xl !text-white">
-                <CardContent className="p-6 space-y-4">
-                  <h3 className="font-semibold text-lg flex items-center space-x-2 mb-4" style={{ color: '#FFFFFF' }}>
-                    <Video className="w-5 h-5" style={{ color: '#97011A' }} />
-                    <span>Video</span>
-                  </h3>
-                  <div className="aspect-video bg-black/30 rounded-xl overflow-hidden border border-white/10 shadow-inner">
-                    <video src={datingProfile.video_url} controls className="w-full h-full rounded-lg" />
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </>
-        )}
-
-        {/* Matrimony Profile Sections */}
-        {userPath === 'matrimony' && matrimonyProfile && (
-          <>
-            {/* Career & Education */}
-            {matrimonyProfile.career && (
-              <Card className={cn(
-                "shadow-sm",
-                isMatrimony 
-                  ? "bg-white border-[#E5E5E5]" 
-                  : "bg-[#14161B] backdrop-blur-xl border-white/20 shadow-xl"
-              )}>
-                <CardContent className="p-6 space-y-4">
-                  <h3 className={cn("font-semibold text-lg flex items-center space-x-2 mb-4", isMatrimony ? "text-black" : "text-white")}>
-                    <Briefcase className="w-5 h-5" style={{ color: '#97011A' }} />
-                    <span>Career & Education</span>
-                  </h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    {matrimonyProfile.career.highest_education && (
-                      <div className="space-y-1">
-                        <p className={cn("text-sm font-medium", isMatrimony ? "text-[#666666]" : "text-[#A1A1AA]")}>Education</p>
-                        <p className={cn("text-sm font-medium", isMatrimony ? "text-black" : "text-white")}>{matrimonyProfile.career.highest_education}</p>
-                      </div>
-                    )}
-                    {matrimonyProfile.career.job_title && (
-                      <div className="space-y-1">
-                        <p className={cn("text-sm font-medium", isMatrimony ? "text-[#666666]" : "text-[#A1A1AA]")}>Profession</p>
-                        <p className={cn("text-sm font-medium", isMatrimony ? "text-black" : "text-white")}>{matrimonyProfile.career.job_title}</p>
-                      </div>
-                    )}
-                    {matrimonyProfile.career.company && (
-                      <div className="space-y-1">
-                        <p className={cn("text-sm font-medium", isMatrimony ? "text-[#666666]" : "text-[#A1A1AA]")}>Company</p>
-                        <p className={cn("text-sm font-medium", isMatrimony ? "text-black" : "text-white")}>{matrimonyProfile.career.company}</p>
-                      </div>
-                    )}
-                    {matrimonyProfile.career.work_location && (
-                      <div className="space-y-1">
-                        <p className={cn("text-sm font-medium", isMatrimony ? "text-[#666666]" : "text-[#A1A1AA]")}>Location</p>
-                        <p className={cn("text-sm font-medium", isMatrimony ? "text-black" : "text-white")}>
-                          {[
-                            matrimonyProfile.career.work_location.city,
-                            matrimonyProfile.career.work_location.state,
-                            matrimonyProfile.career.work_location.country
-                          ].filter(Boolean).join(', ')}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Personal Details */}
-            {matrimonyProfile.personal && (
-              <Card className={cn(
-                "shadow-sm",
-                isMatrimony 
-                  ? "bg-white border-[#E5E5E5]" 
-                  : "bg-[#14161B] backdrop-blur-xl border-white/20 shadow-xl"
-              )}>
-                <CardContent className="p-6 space-y-4">
-                  <h3 className={cn("font-semibold text-lg mb-4", isMatrimony ? "text-black" : "text-white")}>Personal Details</h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    {matrimonyProfile.personal.diet && (
-                      <div className="space-y-1">
-                        <p className={cn("text-sm font-medium", isMatrimony ? "text-[#666666]" : "text-[#A1A1AA]")}>Diet</p>
-                        <p className={cn("text-sm font-medium", isMatrimony ? "text-black" : "text-white")}>{matrimonyProfile.personal.diet}</p>
-                      </div>
-                    )}
-                    {matrimonyProfile.personal.smoker !== undefined && (
-                      <div className="space-y-1">
-                        <p className={cn("text-sm font-medium", isMatrimony ? "text-[#666666]" : "text-[#A1A1AA]")}>Smoking</p>
-                        <p className={cn("text-sm font-medium", isMatrimony ? "text-black" : "text-white")}>{matrimonyProfile.personal.smoker ? "Yes" : "No"}</p>
-                      </div>
-                    )}
-                    {matrimonyProfile.personal.drinker !== undefined && (
-                      <div className="space-y-1">
-                        <p className={cn("text-sm font-medium", isMatrimony ? "text-[#666666]" : "text-[#A1A1AA]")}>Drinking</p>
-                        <p className={cn("text-sm font-medium", isMatrimony ? "text-black" : "text-white")}>{matrimonyProfile.personal.drinker ? "Yes" : "No"}</p>
-                      </div>
-                    )}
-                    {matrimonyProfile.personal.complexion && (
-                      <div className="space-y-1">
-                        <p className={cn("text-sm font-medium", isMatrimony ? "text-[#666666]" : "text-[#A1A1AA]")}>Complexion</p>
-                        <p className={cn("text-sm font-medium", isMatrimony ? "text-black" : "text-white")}>{matrimonyProfile.personal.complexion}</p>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Family Information */}
-            {matrimonyProfile.family && matrimonyProfile.family.show_on_profile && (
-              <Card className={cn(
-                "shadow-sm",
-                isMatrimony 
-                  ? "bg-white border-[#E5E5E5]" 
-                  : "bg-[#14161B] backdrop-blur-xl border-white/20 shadow-xl"
-              )}>
-                <CardContent className="p-6 space-y-4">
-                  <h3 className={cn("font-semibold text-lg flex items-center space-x-2 mb-4", isMatrimony ? "text-black" : "text-white")}>
-                    <Home className="w-5 h-5" style={{ color: '#97011A' }} />
-                    <span>Family Information</span>
-                  </h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    {matrimonyProfile.family.family_type && (
-                      <div className="space-y-1">
-                        <p className={cn("text-sm font-medium", isMatrimony ? "text-[#666666]" : "text-[#A1A1AA]")}>Family Type</p>
-                        <p className={cn("text-sm font-medium", isMatrimony ? "text-black" : "text-white")}>{matrimonyProfile.family.family_type}</p>
-                      </div>
-                    )}
-                    {matrimonyProfile.family.family_values && (
-                      <div className="space-y-1">
-                        <p className={cn("text-sm font-medium", isMatrimony ? "text-[#666666]" : "text-[#A1A1AA]")}>Family Values</p>
-                        <p className={cn("text-sm font-medium", isMatrimony ? "text-black" : "text-white")}>{matrimonyProfile.family.family_values}</p>
-                      </div>
-                    )}
-                    {matrimonyProfile.family.father_occupation && (
-                      <div className="space-y-1">
-                        <p className={cn("text-sm font-medium", isMatrimony ? "text-[#666666]" : "text-[#A1A1AA]")}>Father's Occupation</p>
-                        <p className={cn("text-sm font-medium", isMatrimony ? "text-black" : "text-white")}>{matrimonyProfile.family.father_occupation}</p>
-                      </div>
-                    )}
-                    {matrimonyProfile.family.mother_occupation && (
-                      <div className="space-y-1">
-                        <p className={cn("text-sm font-medium", isMatrimony ? "text-[#666666]" : "text-[#A1A1AA]")}>Mother's Occupation</p>
-                        <p className={cn("text-sm font-medium", isMatrimony ? "text-black" : "text-white")}>{matrimonyProfile.family.mother_occupation}</p>
-                      </div>
-                    )}
-                    {(matrimonyProfile.family.brothers !== undefined || matrimonyProfile.family.sisters !== undefined) && (
-                      <div className="space-y-1">
-                        <p className={cn("text-sm font-medium", isMatrimony ? "text-[#666666]" : "text-[#A1A1AA]")}>Siblings</p>
-                        <p className={cn("text-sm font-medium", isMatrimony ? "text-black" : "text-white")}>
-                          {[
-                            matrimonyProfile.family.brothers ? `${matrimonyProfile.family.brothers} brother(s)` : null,
-                            matrimonyProfile.family.sisters ? `${matrimonyProfile.family.sisters} sister(s)` : null
-                          ].filter(Boolean).join(', ') || 'None'}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Cultural Background */}
-            {matrimonyProfile.cultural && (
-              <Card className={cn(
-                "shadow-sm",
-                isMatrimony 
-                  ? "bg-white border-[#E5E5E5]" 
-                  : "bg-[#14161B] backdrop-blur-xl border-white/20 shadow-xl"
-              )}>
-                <CardContent className="p-6 space-y-4">
-                  <h3 className={cn("font-semibold text-lg flex items-center space-x-2 mb-4", isMatrimony ? "text-black" : "text-white")}>
-                    <Users className="w-5 h-5" style={{ color: '#97011A' }} />
-                    <span>Cultural Background</span>
-                  </h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    {matrimonyProfile.cultural.religion && (
-                      <div className="space-y-1">
-                        <p className={cn("text-sm font-medium", isMatrimony ? "text-[#666666]" : "text-[#A1A1AA]")}>Religion</p>
-                        <p className={cn("text-sm font-medium", isMatrimony ? "text-black" : "text-white")}>{matrimonyProfile.cultural.religion}</p>
-                      </div>
-                    )}
-                    {matrimonyProfile.cultural.mother_tongue && (
-                      <div className="space-y-1">
-                        <p className={cn("text-sm font-medium", isMatrimony ? "text-[#666666]" : "text-[#A1A1AA]")}>Mother Tongue</p>
-                        <p className={cn("text-sm font-medium", isMatrimony ? "text-black" : "text-white")}>{matrimonyProfile.cultural.mother_tongue}</p>
-                      </div>
-                    )}
-                    {matrimonyProfile.cultural.community && (
-                      <div className="space-y-1">
-                        <p className={cn("text-sm font-medium", isMatrimony ? "text-[#666666]" : "text-[#A1A1AA]")}>Community</p>
-                        <p className={cn("text-sm font-medium", isMatrimony ? "text-black" : "text-white")}>{matrimonyProfile.cultural.community}</p>
-                      </div>
-                    )}
-                    {matrimonyProfile.cultural.star_raashi && (
-                      <div className="space-y-1">
-                        <p className={cn("text-sm font-medium", isMatrimony ? "text-[#666666]" : "text-[#A1A1AA]")}>Star/Raashi</p>
-                        <p className={cn("text-sm font-medium", isMatrimony ? "text-black" : "text-white")}>{matrimonyProfile.cultural.star_raashi}</p>
-                      </div>
-                    )}
-                    {matrimonyProfile.cultural.gotra && (
-                      <div className="space-y-1">
-                        <p className={cn("text-sm font-medium", isMatrimony ? "text-[#666666]" : "text-[#A1A1AA]")}>Gotra</p>
-                        <p className={cn("text-sm font-medium", isMatrimony ? "text-black" : "text-white")}>{matrimonyProfile.cultural.gotra}</p>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </>
-        )}
-
-        {!profile && (
-          <Card className={cn(
-            "shadow-sm",
-            isMatrimony 
-              ? "bg-white border-[#E5E5E5]" 
-              : "bg-[#14161B]/50 backdrop-blur-xl border-white/20 shadow-xl"
-          )}>
-            <CardContent className="p-6">
-              <p className={cn("text-center", isMatrimony ? "text-black" : "text-white")}>No profile data available</p>
-            </CardContent>
-          </Card>
-        )}
+        <Card className="border-[#E5E5E5]">
+          <CardContent className="p-6 space-y-4">
+            <h3 className="font-semibold text-lg text-black">Partner Preferences</h3>
+            <div className="grid sm:grid-cols-2 gap-4 text-sm text-[#666666]">
+              {(preferences.min_age || preferences.max_age) && (
+                <div>
+                  <span className="font-medium text-black">Age Range:</span> {preferences.min_age || "?"} - {preferences.max_age || "?"}
+                </div>
+              )}
+              {Array.isArray(preferences.locations) && preferences.locations.length > 0 && (
+                <div className="sm:col-span-2">
+                  <span className="font-medium text-black">Preferred Locations:</span> {preferences.locations.join(", ")}
+                </div>
+              )}
+              {Array.isArray(preferences.communities) && preferences.communities.length > 0 && (
+                <div className="sm:col-span-2">
+                  <span className="font-medium text-black">Preferred Communities:</span> {preferences.communities.join(", ")}
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   )

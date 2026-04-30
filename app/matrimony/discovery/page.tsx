@@ -63,10 +63,8 @@ export default function MatrimonyDiscovery() {
   return (
     <div className="matrimony-theme">
       <MatrimonyMain onExit={() => {
-        // Navigate back to home or dating mode
         window.location.href = "/"
       }} />
     </div>
   )
 }
-

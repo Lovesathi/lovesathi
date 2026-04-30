@@ -76,7 +76,7 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
 
       const { data: profile, error } = await supabase
         .from('user_profiles')
-        .select('selected_path, onboarding_completed')
+        .select('onboarding_matrimony')
         .eq('user_id', userId)
         .single()
 
@@ -86,17 +86,15 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
         return
       }
 
-      // Check if onboarding is explicitly completed (true)
-      if (profile.onboarding_completed !== true) {
-        console.log('Onboarding not completed, sending to verification:', { 
-          onboarding_completed: profile.onboarding_completed 
+      if (profile.onboarding_matrimony !== true) {
+        console.log('Matrimony onboarding not completed, sending to verification:', {
+          onboarding_matrimony: profile.onboarding_matrimony,
         })
         router.push('/onboarding/verification')
         return
       }
 
-      // If onboarding is completed, show path selection instead of going directly to dashboard
-      router.push('/select-path')
+      router.push('/matrimony/discovery')
       return
     } catch (err) {
       console.error('Error checking profile:', err)

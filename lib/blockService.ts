@@ -1,6 +1,6 @@
 import { supabase } from './supabaseClient'
 
-export async function blockUser(blockerId: string, blockedId: string, matchType: 'dating' | 'matrimony'): Promise<{ success: boolean; error?: string }> {
+export async function blockUser(blockerId: string, blockedId: string, matchType: 'matrimony' = 'matrimony'): Promise<{ success: boolean; error?: string }> {
   try {
     // Insert into blocked_users table
     const { error } = await supabase
@@ -18,9 +18,8 @@ export async function blockUser(blockerId: string, blockedId: string, matchType:
     }
 
     // Deactivate the match between these users
-    const matchTable = matchType === 'dating' ? 'dating_matches' : 'matrimony_matches'
     const { error: matchError } = await supabase
-      .from(matchTable)
+      .from('matrimony_matches')
       .update({ is_active: false })
       .or(`and(user1_id.eq.${blockerId},user2_id.eq.${blockedId}),and(user1_id.eq.${blockedId},user2_id.eq.${blockerId})`)
 
@@ -36,7 +35,7 @@ export async function blockUser(blockerId: string, blockedId: string, matchType:
   }
 }
 
-export async function unblockUser(blockerId: string, blockedId: string, matchType: 'dating' | 'matrimony'): Promise<{ success: boolean; error?: string }> {
+export async function unblockUser(blockerId: string, blockedId: string, matchType: 'matrimony' = 'matrimony'): Promise<{ success: boolean; error?: string }> {
   try {
     const { error } = await supabase
       .from('blocked_users')
@@ -57,7 +56,7 @@ export async function unblockUser(blockerId: string, blockedId: string, matchTyp
   }
 }
 
-export async function isUserBlocked(blockerId: string, blockedId: string, matchType: 'dating' | 'matrimony'): Promise<boolean> {
+export async function isUserBlocked(blockerId: string, blockedId: string, matchType: 'matrimony' = 'matrimony'): Promise<boolean> {
   try {
     const { data, error } = await supabase
       .from('blocked_users')
@@ -74,7 +73,7 @@ export async function isUserBlocked(blockerId: string, blockedId: string, matchT
   }
 }
 
-export async function getBlockedUsers(userId: string, matchType: 'dating' | 'matrimony'): Promise<string[]> {
+export async function getBlockedUsers(userId: string, matchType: 'matrimony' = 'matrimony'): Promise<string[]> {
   try {
     const { data, error } = await supabase
       .from('blocked_users')

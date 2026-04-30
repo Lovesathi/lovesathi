@@ -51,57 +51,50 @@ interface SettingsItem {
 
 type SettingsNavigateHandler = (id: string) => void
 
-// Settings sections will be generated dynamically based on user path
-const getSettingsSections = (userPath: 'dating' | 'matrimony' | null): SettingsSection[] => {
-  const sections: SettingsSection[] = [
-    {
-      title: "Account",
-      items: [
-        {
-          id: "profile",
-          label: "Edit Profile",
-          description: "Update your photos and information",
-          icon: User,
-          type: "navigation",
-        },
-        {
-          id: "premium",
-          label: "Premium Features",
-          description: "Upgrade to unlock all features",
-          icon: Crown,
-          type: "navigation",
-          badge: "Upgrade",
-        },
-        {
-          id: "verification",
-          label: "Profile Verification",
-          description: "Verify your profile with photo ID",
-          icon: Shield,
-          type: "navigation",
-        },
-      ],
-    },
-  ]
-
-  return sections
-}
+const settingsSections: SettingsSection[] = [
+  {
+    title: "Account",
+    items: [
+      {
+        id: "profile",
+        label: "Edit Profile",
+        description: "Update your photos and information",
+        icon: User,
+        type: "navigation",
+      },
+      {
+        id: "premium",
+        label: "Premium Features",
+        description: "Upgrade to unlock all features",
+        icon: Crown,
+        type: "navigation",
+        badge: "Upgrade",
+      },
+      {
+        id: "verification",
+        label: "Profile Verification",
+        description: "Verify your profile with photo ID",
+        icon: Shield,
+        type: "navigation",
+      },
+    ],
+  },
+]
 
 interface UserInfo {
   name: string
   email: string
   photo: string | null
   accountType: string
-  userPath: 'dating' | 'matrimony' | null
 }
 
 export function SettingsScreen({ onNavigate, onLogout, mode, onBack }: { onNavigate?: SettingsNavigateHandler; onLogout?: () => void; mode?: 'dating' | 'matrimony'; onBack?: () => void }) {
-  const isMatrimony = mode === 'matrimony'
+  const isMatrimony = true
   const [userInfo, setUserInfo] = useState<UserInfo>({
     name: "Loading...",
     email: "Loading...",
     photo: null,
     accountType: "Free Account",
-    userPath: null
   })
   const [loading, setLoading] = useState(true)
   const [verificationStatus, setVerificationStatus] = useState<'pending' | 'approved' | 'rejected' | 'in_review' | null>(null)
@@ -139,7 +132,6 @@ export function SettingsScreen({ onNavigate, onLogout, mode, onBack }: { onNavig
           email: "Not available",
           photo: null,
           accountType: "Free Account",
-          userPath: null
         })
         setLoading(false)
         return
@@ -147,49 +139,19 @@ export function SettingsScreen({ onNavigate, onLogout, mode, onBack }: { onNavig
 
       const email = user.email || "Not available"
 
-      // Get user's selected path
-      const { data: userProfile, error: userProfileError } = await supabase
-        .from('user_profiles')
-        .select('selected_path')
-        .eq('user_id', user.id)
-        .single()
-
-      const userPath = (!userProfileError && userProfile?.selected_path) ? 
-        (userProfile.selected_path as 'dating' | 'matrimony') : null
-
       let name = "User"
       let photo: string | null = null
 
-      // Use mode prop to determine which profile table to query
-      // Mode is determined by the current context (which page/route we're on)
-      const currentMode = mode || 'dating' // Default to dating for backward compatibility
+      const { data: matrimonyProfile, error: matrimonyError } = await supabase
+        .from('matrimony_profile_full')
+        .select('name, photos')
+        .eq('user_id', user.id)
+        .maybeSingle()
 
-      if (currentMode === 'dating') {
-        // ALWAYS fetch from dating_profile_full when in dating mode
-        const { data: datingProfile, error: datingError } = await supabase
-          .from('dating_profile_full')
-          .select('name, photos')
-          .eq('user_id', user.id)
-          .maybeSingle()
-
-        if (!datingError && datingProfile) {
-          name = datingProfile.name || name
-          const photos = (datingProfile.photos as string[]) || []
-          photo = photos.length > 0 ? photos[0] : null
-        }
-      } else if (currentMode === 'matrimony') {
-        // ALWAYS fetch from matrimony_profile_full when in matrimony mode
-        const { data: matrimonyProfile, error: matrimonyError } = await supabase
-          .from('matrimony_profile_full')
-          .select('name, photos')
-          .eq('user_id', user.id)
-          .maybeSingle()
-
-        if (!matrimonyError && matrimonyProfile) {
-          name = matrimonyProfile.name || name
-          const photos = (matrimonyProfile.photos as string[]) || []
-          photo = photos.length > 0 ? photos[0] : null
-        }
+      if (!matrimonyError && matrimonyProfile) {
+        name = matrimonyProfile.name || name
+        const photos = (matrimonyProfile.photos as string[]) || []
+        photo = photos.length > 0 ? photos[0] : null
       }
 
       // Get initials for fallback
@@ -205,7 +167,6 @@ export function SettingsScreen({ onNavigate, onLogout, mode, onBack }: { onNavig
         email,
         photo,
         accountType: "Free Account", // TODO: Check subscription status if you have a subscriptions table
-        userPath
       })
     } catch (error) {
       console.error("Error fetching user info:", error)
@@ -214,7 +175,6 @@ export function SettingsScreen({ onNavigate, onLogout, mode, onBack }: { onNavig
         email: "Not available",
         photo: null,
         accountType: "Free Account",
-        userPath: null
       })
     } finally {
       setLoading(false)
@@ -293,7 +253,7 @@ export function SettingsScreen({ onNavigate, onLogout, mode, onBack }: { onNavig
       {/* Settings */}
       <div className="flex-1 overflow-y-auto relative z-10">
         <div className="p-6 space-y-6">
-          {getSettingsSections(userInfo.userPath).map((section) => (
+          {settingsSections.map((section) => (
             <div key={section.title} className="space-y-3">
               <h2 className={cn("text-sm font-semibold uppercase tracking-wider", isMatrimony ? "text-[#444444]" : "text-white/75")}>
                 {section.title}

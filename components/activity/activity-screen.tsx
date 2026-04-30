@@ -10,9 +10,7 @@ import { cn } from "@/lib/utils"
 import { StaticBackground } from "@/components/discovery/static-background"
 import { supabase } from "@/lib/supabaseClient"
 import { 
-  getDatingActivity, 
   getMatrimonyActivity,
-  recordDatingLike,
   recordMatrimonyLike,
   type ActivityItem 
 } from "@/lib/matchmakingService"
@@ -20,18 +18,18 @@ import {
 interface ActivityScreenProps {
   onProfileClick?: (userId: string) => void
   onMatchClick?: (matchId: string) => void
-  mode?: 'dating' | 'matrimony'
+  mode?: 'matrimony'
   onBack?: () => void
 }
 
-export function ActivityScreen({ onProfileClick, onMatchClick, mode = 'dating', onBack }: ActivityScreenProps) {
+export function ActivityScreen({ onProfileClick, onMatchClick, onBack }: ActivityScreenProps) {
   const [activeTab, setActiveTab] = useState<'all' | 'matches' | 'likes' | 'views'>('all')
   const [activities, setActivities] = useState<ActivityItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [likedBack, setLikedBack] = useState<Set<string>>(new Set())
   const [likingInProgress, setLikingInProgress] = useState<Set<string>>(new Set())
-  const isMatrimony = mode === 'matrimony'
+  const isMatrimony = true
 
   // Fetch activity data
   useEffect(() => {
@@ -47,10 +45,7 @@ export function ActivityScreen({ onProfileClick, onMatchClick, mode = 'dating', 
           return
         }
 
-        // Use mode to determine which function to call
-        const activityData = mode === 'matrimony' 
-          ? await getMatrimonyActivity(user.id)
-          : await getDatingActivity(user.id)
+        const activityData = await getMatrimonyActivity(user.id)
         setActivities(activityData)
       } catch (err: any) {
         console.error("Error fetching activity:", err)
@@ -61,7 +56,7 @@ export function ActivityScreen({ onProfileClick, onMatchClick, mode = 'dating', 
     }
 
     fetchActivity()
-  }, [mode])
+  }, [])
 
   const handleLikeBack = async (activity: ActivityItem, e: React.MouseEvent) => {
     e.stopPropagation()
@@ -77,10 +72,7 @@ export function ActivityScreen({ onProfileClick, onMatchClick, mode = 'dating', 
         return
       }
 
-      // Use mode to determine which function to call
-      const result = mode === 'matrimony'
-        ? await recordMatrimonyLike(user.id, activity.userId, 'like')
-        : await recordDatingLike(user.id, activity.userId, 'like')
+      const result = await recordMatrimonyLike(user.id, activity.userId, 'like')
       
       if (result.success) {
         setLikedBack(prev => new Set(prev).add(activity.id))
@@ -97,9 +89,7 @@ export function ActivityScreen({ onProfileClick, onMatchClick, mode = 'dating', 
           try {
             const { data: { user: currentUser } } = await supabase.auth.getUser()
             if (currentUser) {
-              const updatedActivity = mode === 'matrimony'
-                ? await getMatrimonyActivity(currentUser.id)
-                : await getDatingActivity(currentUser.id)
+              const updatedActivity = await getMatrimonyActivity(currentUser.id)
               setActivities(updatedActivity)
             }
           } catch (refreshError) {
@@ -408,4 +398,3 @@ export function ActivityScreen({ onProfileClick, onMatchClick, mode = 'dating', 
     </div>
   )
 }
-

@@ -138,50 +138,25 @@ export async function saveDateOfBirth(dob: string) {
     
     console.log('✅ DOB saved to user_profiles:', result.data)
 
-    // Always sync to dating_profile_full (create if doesn't exist)
-    const { data: existingDatingProfile } = await supabase
-      .from('dating_profile_full')
+    const { data: existingMatrimonyProfile } = await supabase
+      .from('matrimony_profile_full')
       .select('*')
       .eq('user_id', user.id)
       .maybeSingle()
 
-    // Get user profile to check path
-    const { data: userProfile } = await supabase
-      .from('user_profiles')
-      .select('selected_path')
-      .eq('user_id', user.id)
-      .maybeSingle()
-
-    // Sync to dating_profile_full if path is dating or not set yet
-    if (existingDatingProfile) {
-      // Update existing profile
+    if (existingMatrimonyProfile) {
       const { error: updateError } = await supabase
-        .from('dating_profile_full')
-        .update({ dob: dob })
+        .from('matrimony_profile_full')
+        .update({
+          cultural: {
+            ...(existingMatrimonyProfile.cultural || {}),
+            date_of_birth: dob,
+          },
+        })
         .eq('user_id', user.id)
       
       if (updateError) {
-        console.warn('Warning: Could not update dating_profile_full:', updateError.message)
-        // Don't throw - this is optional sync
-      }
-    } else if (!userProfile?.selected_path || userProfile?.selected_path === 'dating') {
-      // Create new profile with dob (if user has selected dating path or path not set yet)
-      const { error: insertError } = await supabase
-        .from('dating_profile_full')
-        .insert({
-          user_id: user.id,
-          name: '', // Will be set later
-          dob: dob,
-          interests: [],
-          prompts: [],
-          photos: [],
-          preferences: {},
-          this_or_that_choices: [],
-        })
-      
-      if (insertError) {
-        console.warn('Warning: Could not insert into dating_profile_full:', insertError.message)
-        // Don't throw - this is optional sync, table might not exist yet
+        console.warn('Warning: Could not update matrimony_profile_full:', updateError.message)
       }
     }
 
@@ -253,85 +228,40 @@ export async function saveGender(gender: 'male' | 'female' | 'prefer_not_to_say'
       throw result.error
     }
 
-    // Convert gender format for dating (lowercase) and matrimony (capitalized)
-    const genderValue = gender === 'prefer_not_to_say' ? null : gender
     const genderMatrimony = gender === 'prefer_not_to_say' ? null : (gender === 'male' ? 'Male' : gender === 'female' ? 'Female' : 'Other')
 
-    // Always sync to dating_profile_full (create if doesn't exist)
-    const { data: existingDatingProfile } = await supabase
-      .from('dating_profile_full')
+    const { data: userProfileForMatrimony } = await supabase
+      .from('user_profiles')
+      .select('date_of_birth')
+      .eq('user_id', user.id)
+      .maybeSingle()
+
+    const { data: existingMatrimonyProfile } = await supabase
+      .from('matrimony_profile_full')
       .select('*')
       .eq('user_id', user.id)
       .maybeSingle()
 
-    if (existingDatingProfile) {
-      // Update existing profile
+    if (existingMatrimonyProfile) {
       await supabase
-        .from('dating_profile_full')
-        .update({ gender: genderValue })
+        .from('matrimony_profile_full')
+        .update({ gender: genderMatrimony })
         .eq('user_id', user.id)
     } else {
-      // Create new profile with gender (if user has selected dating path)
-      const { data: userProfile } = await supabase
-        .from('user_profiles')
-        .select('selected_path, date_of_birth')
-        .eq('user_id', user.id)
-        .maybeSingle()
-
-      if (userProfile?.selected_path === 'dating') {
-        await supabase
-          .from('dating_profile_full')
-          .insert({
-            user_id: user.id,
-            name: '', // Will be set later
-            dob: userProfile.date_of_birth || null,
-            gender: genderValue,
-            interests: [],
-            prompts: [],
-            photos: [],
-            preferences: {},
-            this_or_that_choices: [],
-          })
-      }
-    }
-
-    // Also sync to matrimony_profile_full if user has selected matrimony path
-    const { data: userProfileForMatrimony } = await supabase
-      .from('user_profiles')
-      .select('selected_path, date_of_birth')
-      .eq('user_id', user.id)
-      .maybeSingle()
-
-    if (userProfileForMatrimony?.selected_path === 'matrimony') {
-      const { data: existingMatrimonyProfile } = await supabase
+      await supabase
         .from('matrimony_profile_full')
-        .select('*')
-        .eq('user_id', user.id)
-        .maybeSingle()
-
-      if (existingMatrimonyProfile) {
-        // Update existing matrimony profile
-        await supabase
-          .from('matrimony_profile_full')
-          .update({ gender: genderMatrimony })
-          .eq('user_id', user.id)
-      } else {
-        // Create new matrimony profile with gender
-        await supabase
-          .from('matrimony_profile_full')
-          .insert({
-            user_id: user.id,
-            name: '', // Will be set later
-            gender: genderMatrimony,
-            photos: [],
-            personal: {},
-            career: {},
-            family: {},
-            cultural: {
-              date_of_birth: userProfileForMatrimony.date_of_birth || null,
-            },
-          })
-      }
+        .insert({
+          user_id: user.id,
+          name: '',
+          gender: genderMatrimony,
+          photos: [],
+          personal: {},
+          career: {},
+          family: {},
+          cultural: {
+            date_of_birth: userProfileForMatrimony?.date_of_birth || null,
+          },
+        })
     }
 
     // Update verification progress (don't fail if this errors)
@@ -360,18 +290,15 @@ export async function getUserProfile() {
       throw new Error('User not authenticated')
     }
 
-    // Explicitly select onboarding fields to ensure they are returned as booleans
     const { data, error } = await supabase
       .from('user_profiles')
-      .select('*, onboarding_dating, onboarding_matrimony')
+      .select('*, onboarding_matrimony')
       .eq('user_id', user.id)
       .single()
 
     if (error && error.code !== 'PGRST116') throw error // PGRST116 = no rows returned
 
-    // Ensure boolean fields are explicitly boolean (not null/undefined)
     if (data) {
-      data.onboarding_dating = data.onboarding_dating === true
       data.onboarding_matrimony = data.onboarding_matrimony === true
     }
 
@@ -753,4 +680,3 @@ export async function completeIDVerification(
     return { success: false, error: error.message }
   }
 }
-

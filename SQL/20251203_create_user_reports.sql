@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS user_reports (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   reporter_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   reported_user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  match_type VARCHAR(10) NOT NULL CHECK (match_type IN ('dating', 'matrimony')),
+  match_type VARCHAR(10) NOT NULL DEFAULT 'matrimony' CHECK (match_type = 'matrimony'),
   reason VARCHAR(50) NOT NULL,
   description TEXT,
   status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'reviewed', 'resolved', 'dismissed')),

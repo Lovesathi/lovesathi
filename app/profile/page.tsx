@@ -10,7 +10,7 @@ function ProfilePageContent() {
   const searchParams = useSearchParams()
   const [isLoading, setIsLoading] = useState(true)
   const [userId, setUserId] = useState<string | null>(null)
-  const [mode, setMode] = useState<'dating' | 'matrimony'>('dating')
+  const [mode, setMode] = useState<'matrimony'>('matrimony')
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -22,9 +22,8 @@ function ProfilePageContent() {
           return
         }
 
-        // Get userId and mode from URL params
+        // Lovesathi is matrimony-only now.
         const targetUserId = searchParams.get('userId')
-        const profileMode = searchParams.get('mode') as 'dating' | 'matrimony'
 
         if (!targetUserId) {
           // If no userId provided, show own profile
@@ -33,11 +32,11 @@ function ProfilePageContent() {
           setUserId(targetUserId)
         }
 
-        setMode(profileMode || 'dating')
+        setMode('matrimony')
         setIsLoading(false)
       } catch (error) {
         console.error('Error loading profile:', error)
-        router.push('/dating/dashboard')
+        router.push('/matrimony/discovery')
       }
     }
 

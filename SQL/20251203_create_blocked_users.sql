@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS blocked_users (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   blocker_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   blocked_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  match_type VARCHAR(10) NOT NULL CHECK (match_type IN ('dating', 'matrimony')),
+  match_type VARCHAR(10) NOT NULL DEFAULT 'matrimony' CHECK (match_type = 'matrimony'),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   UNIQUE(blocker_id, blocked_id, match_type)
 );

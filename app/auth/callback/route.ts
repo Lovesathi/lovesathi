@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
       // Check user profile for onboarding status
       const { data: profile, error } = await supabase
         .from('user_profiles')
-        .select('selected_path, onboarding_completed')
+        .select('onboarding_matrimony')
         .eq('user_id', user.id)
         .single()
 
@@ -33,20 +33,17 @@ export async function GET(request: NextRequest) {
         return NextResponse.redirect(new URL('/onboarding/verification', requestUrl.origin))
       }
 
-      // Check if onboarding is explicitly completed (true)
-      if (profile.onboarding_completed !== true) {
-        console.log('Onboarding not completed, sending to verification:', { 
-          onboarding_completed: profile.onboarding_completed 
+      if (profile.onboarding_matrimony !== true) {
+        console.log('Matrimony onboarding not completed, sending to verification:', {
+          onboarding_matrimony: profile.onboarding_matrimony,
         })
         return NextResponse.redirect(new URL('/onboarding/verification', requestUrl.origin))
       }
 
-      // If onboarding is completed, show path selection instead of going directly to dashboard
-      return NextResponse.redirect(new URL('/select-path', requestUrl.origin))
+      return NextResponse.redirect(new URL('/matrimony/discovery', requestUrl.origin))
     }
   }
 
   // URL to redirect to after sign in process completes
   return NextResponse.redirect(new URL('/auth/verify-email', requestUrl.origin))
 }
-

@@ -12,9 +12,7 @@ echo ""
 echo "✅ Buckets that should exist:"
 echo "   1. verification-documents (PRIVATE)"
 echo "   2. face-scans (PRIVATE)"
-echo "   3. profile-photos (PUBLIC)"
-echo "   4. profile-videos (PUBLIC)"
-echo "   5. matrimony-photos (PUBLIC)"
+echo "   3. matrimony-photos (PUBLIC)"
 echo ""
 
 echo "🔧 To fix upload issues:"
@@ -44,4 +42,3 @@ fi
 echo ""
 echo "================================"
 echo "Need help? Check STORAGE_FIX_GUIDE.md"
-

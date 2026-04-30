@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabaseClient'
-import { getDatingActivity, getMatrimonyActivity, type ActivityItem } from '@/lib/matchmakingService'
+import { getMatrimonyActivity } from '@/lib/matchmakingService'
 
-export function useUnreadActivityCount(mode: 'dating' | 'matrimony' = 'dating') {
+export function useUnreadActivityCount() {
   const [unreadCount, setUnreadCount] = useState<number>(0)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const processedActivityIds = useRef<Set<string>>(new Set())
@@ -31,9 +31,7 @@ export function useUnreadActivityCount(mode: 'dating' | 'matrimony' = 'dating') 
       }
       lastFetchTime.current = now
 
-      const activities = mode === 'matrimony' 
-        ? await getMatrimonyActivity(userId)
-        : await getDatingActivity(userId)
+      const activities = await getMatrimonyActivity(userId)
       
       // Count only new/unseen activities (activities with isNew flag or recent ones)
       const newActivities = activities.filter(activity => {
@@ -57,7 +55,7 @@ export function useUnreadActivityCount(mode: 'dating' | 'matrimony' = 'dating') 
       })
 
       const count = newActivities.length
-      console.log(`[useUnreadActivityCount] Fetched unread activity count (${mode}):`, count)
+      console.log(`[useUnreadActivityCount] Fetched unread activity count (matrimony):`, count)
       setUnreadCount(count)
     } catch (error) {
       console.error('[useUnreadActivityCount] Error fetching unread activity count:', error)
@@ -68,7 +66,7 @@ export function useUnreadActivityCount(mode: 'dating' | 'matrimony' = 'dating') 
   useEffect(() => {
     if (!currentUserId) return
     fetchUnreadActivityCount(currentUserId)
-  }, [currentUserId, mode])
+  }, [currentUserId])
 
   // Refresh count when tab becomes visible
   useEffect(() => {
@@ -97,7 +95,7 @@ export function useUnreadActivityCount(mode: 'dating' | 'matrimony' = 'dating') 
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       window.removeEventListener('focus', handleFocus)
     }
-  }, [currentUserId, mode])
+  }, [currentUserId])
 
   // Refresh count periodically (every 15 seconds for activity)
   useEffect(() => {
@@ -108,7 +106,7 @@ export function useUnreadActivityCount(mode: 'dating' | 'matrimony' = 'dating') 
     }, 15000)
 
     return () => clearInterval(interval)
-  }, [currentUserId, mode])
+  }, [currentUserId])
 
   // Clean up processed activity IDs periodically
   useEffect(() => {

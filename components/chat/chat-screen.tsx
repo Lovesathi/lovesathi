@@ -83,7 +83,7 @@ export function ChatScreen({ matchId, onBack, onViewProfile }: ChatScreenProps) 
   const [uploading, setUploading] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [chatUser, setChatUser] = useState<ChatUser | null>(null)
-  const [matchType, setMatchType] = useState<'dating' | 'matrimony'>('dating')
+  const [matchType, setMatchType] = useState<'dating' | 'matrimony'>('matrimony')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const channelRef = useRef<RealtimeChannel | null>(null)
   const observerRef = useRef<IntersectionObserver | null>(null)
@@ -401,34 +401,20 @@ export function ChatScreen({ matchId, onBack, onViewProfile }: ChatScreenProps) 
 
         setCurrentUserId(user.id)
 
-        // Get match info from dating_matches first
         let { data: matchData, error: matchError } = await supabase
-          .from('dating_matches')
+          .from('matrimony_matches')
           .select('user1_id, user2_id')
           .eq('id', matchId)
           .eq('is_active', true)
           .single()
 
         let otherUserId: string | null = null
-        let currentMatchType: 'dating' | 'matrimony' = 'dating'
+        let currentMatchType: 'dating' | 'matrimony' = 'matrimony'
 
         if (matchError || !matchData) {
-          // Try matrimony_matches
-          const { data: matrimonyMatch, error: matrimonyError } = await supabase
-            .from('matrimony_matches')
-            .select('user1_id, user2_id')
-            .eq('id', matchId)
-            .eq('is_active', true)
-            .single()
-
-          if (matrimonyError || !matrimonyMatch) {
-            console.error('Match not found')
-            setLoading(false)
-            return
-          }
-
-          matchData = matrimonyMatch
-          currentMatchType = 'matrimony'
+          console.error('Match not found')
+          setLoading(false)
+          return
         }
 
         setMatchType(currentMatchType)
@@ -450,9 +436,8 @@ export function ChatScreen({ matchId, onBack, onViewProfile }: ChatScreenProps) 
         }
 
         // Get other user's profile
-        const profileTable = currentMatchType === 'dating' ? 'dating_profile_full' : 'matrimony_profile_full'
         const { data: profile, error: profileError } = await supabase
-          .from(profileTable)
+          .from('matrimony_profile_full')
           .select('name, photos')
           .eq('user_id', otherUserId)
           .single()
@@ -692,7 +677,7 @@ export function ChatScreen({ matchId, onBack, onViewProfile }: ChatScreenProps) 
         if (onBack) {
           onBack()
         } else {
-          router.push('/dating/dashboard')
+          router.push('/matrimony/discovery')
         }
       } else {
         toast({

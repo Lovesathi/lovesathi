@@ -85,7 +85,7 @@ export function MatrimonySetup() {
                 // Mark onboarding as completed
                 const { data: { user } } = await supabase.auth.getUser()
                 if (user) {
-                  await completeOnboarding(user.id, "matrimony")
+                  await completeOnboarding(user.id)
                 }
                 toast.success("Matrimony setup complete")
                 router.push("/matrimony/discovery")
@@ -100,5 +100,4 @@ export function MatrimonySetup() {
     </div>
   )
 }
-
 

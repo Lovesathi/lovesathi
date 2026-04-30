@@ -33,9 +33,7 @@ export async function POST(request: NextRequest) {
     const buckets = [
       'verification-documents',
       'face-scans',
-      'profile-photos',
       'matrimony-photos',
-      'profile-videos'
     ]
 
     for (const bucket of buckets) {
@@ -114,4 +112,3 @@ export async function POST(request: NextRequest) {
     )
   }
 }
-
