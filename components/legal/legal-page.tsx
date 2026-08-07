@@ -37,7 +37,7 @@ export function LegalPage({ eyebrow, title, description, sections }: LegalPagePr
           </h1>
           <p className="mt-5 max-w-3xl text-lg leading-8 text-[#6F7C8B]">{description}</p>
           <p className="mt-5 rounded-2xl border border-[#E83262]/24 bg-[#ffffff]/72 p-4 text-sm leading-6 text-[#6F7C8B]">
-            Last updated: May 2026. These policies are written for the live Lovesathi product experience and should be reviewed with counsel before final store submission.
+            Last updated: August 7, 2026. These policies describe the live Lovesathi product experience and should receive final legal review before statutory or store submission.
           </p>
         </section>
 
@@ -49,6 +49,12 @@ export function LegalPage({ eyebrow, title, description, sections }: LegalPagePr
             </article>
           ))}
         </section>
+
+        <nav className="mt-6 rounded-[1.7rem] border border-[#482b1a]/10 bg-[#ffffff]/78 p-5 shadow-sm backdrop-blur" aria-label="Legal policies">
+          <Link href="/policies" className="text-sm font-bold text-[#E83262] hover:underline">
+            View all Lovesathi policies
+          </Link>
+        </nav>
       </div>
     </main>
   )

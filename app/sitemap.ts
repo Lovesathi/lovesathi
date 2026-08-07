@@ -4,7 +4,25 @@ const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || "https://lovesathi.com").re
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const now = new Date()
-  return ["/", "/auth", "/events", "/terms", "/privacy", "/safety", "/child-safety-standards", "/faq", "/contact", "/account-deletion"].map((path) => ({
+  return [
+    "/",
+    "/auth",
+    "/events",
+    "/policies",
+    "/terms",
+    "/privacy",
+    "/refund-cancellation",
+    "/safety",
+    "/community-guidelines",
+    "/cookies",
+    "/content-moderation",
+    "/child-safety-standards",
+    "/grievance-redressal",
+    "/faq",
+    "/contact",
+    "/contact-support",
+    "/account-deletion",
+  ].map((path) => ({
     url: `${siteUrl}${path}`,
     lastModified: now,
     changeFrequency: path === "/" || path === "/events" ? "weekly" : "monthly",

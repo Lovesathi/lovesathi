@@ -311,11 +311,13 @@ export default function Home() {
           <div className="flex flex-wrap gap-5">
             <Link href="/terms">Terms</Link>
             <Link href="/privacy">Privacy</Link>
+            <Link href="/policies">All policies</Link>
+            <Link href="/community-guidelines">Community</Link>
             <Link href="/safety">Safety</Link>
             <Link href="/events">Events</Link>
             <Link href="/child-safety-standards">Child safety standards</Link>
             <Link href="/account-deletion">Account deletion</Link>
-            <Link href="/contact">Contact</Link>
+            <Link href="/contact-support">Support</Link>
           </div>
         </div>
       </footer>

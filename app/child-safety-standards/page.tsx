@@ -100,7 +100,7 @@ export default function ChildSafetyStandardsPage() {
               where needed, and cooperate with valid legal requests as required by law.
             </p>
             <p className="mt-6 text-xs font-semibold uppercase tracking-[0.24em] text-[#95A1AF]">
-              Last updated: June 10, 2026
+              Last updated: August 7, 2026
             </p>
           </section>
         </section>
